@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+
+  "name": "tamariba",
+
+  "compatibility_date": "2026-05-15",
+
+  "pages_build_output_dir": "./dist"
+}
