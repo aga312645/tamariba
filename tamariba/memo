@@ -1,0 +1,4 @@
+git status
+git add .
+git commit -m "Hello World! (making now)"
+git push origin main
