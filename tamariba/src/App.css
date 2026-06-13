@@ -1,0 +1,37 @@
+/* ヘッダー全体のデザイン */
+.global-header {
+  display: flex;
+  justify-content: space-between; /* ロゴとナビゲーションを両端に離す */
+  align-items: center;
+  padding: 15px 30px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.header-logo {
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+/* リンクの集まりを横並びにする */
+.header-nav {
+  display: flex;
+  gap: 20px; /* リンク同士の間隔 */
+}
+
+/* リンク単体のデザイン */
+.nav-item {
+  text-decoration: none;
+  color: #333333;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.nav-item:hover {
+  color: #007bff; /* ホバー時に青くする */
+}
+
+/* 各ページの中身が入るコンテナ */
+.main-content {
+  padding: 40px 30px;
+}
