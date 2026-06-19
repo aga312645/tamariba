@@ -1,0 +1,7 @@
+name = "tamariba" # プロジェクト名
+pages_build_output_dir = "dist" # ビルド後のディレクトリ（適宜合わせる）
+
+[[d1_databases]]
+binding = "DB" # コード内で `env.DB` と書いているなら "DB" に合わせる
+database_name = "tamariba-db" # ダッシュボードで作ったDB名
+database_id = "a4690a1d-b762-41b8-aac6-8a95deb27884" # ダッシュボードで確認できるID
