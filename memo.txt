@@ -5,6 +5,8 @@ git push
 
 npm run dev
 
+npx wrangler d1 execute --remote --file=./schema.sql
+
 HTML（HyperText Markup Language）は、ウェブページの骨組みを作るための言語です。タグと呼ばれる記号（`< >`）でテキストを囲むことで、ブラウザに「ここは見出し」「ここは画像」と伝えます。
 
 基本的には、開始タグ（`<タグ名>`）と終了タグ（`</タグ名>`）をセットで使います。
