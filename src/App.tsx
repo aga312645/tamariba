@@ -45,6 +45,14 @@ function App() {
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>読み込み中...</div>
   }
+
+  // 👇 修正ポイント：読み込み完了後に表示するメインのホワイトボード
+  // licenseKey を完全に削除したシンプルな形にします
+  return (
+    <div className="tldraw-container" style={{ position: 'fixed', inset: 0 }}>
+      <Tldraw store={store} />
+    </div>
+  )
 }
 
 export default App
