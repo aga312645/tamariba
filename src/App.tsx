@@ -1,4 +1,4 @@
-import { Tldraw, createTLStore, defaultShapeUtils } from '@tldraw/tldraw'
+import { Tldraw, createTLStore, defaultShapeUtils, getSnapshot, loadSnapshot } from '@tldraw/tldraw'
 import '@tldraw/tldraw/tldraw.css'
 import './App.css'
 import { useEffect, useState } from 'react'
@@ -13,7 +13,8 @@ function App() {
       .then((res) => res.json())
       .then((data) => {
         if (data && Object.keys(data).length > 0) {
-          store.loadSnapshot(data) // キャンバスに復元
+          // 最新版では外部関数の loadSnapshot(store, data) を使います
+          loadSnapshot(store, data) 
         }
         setLoading(false)
       })
@@ -28,7 +29,8 @@ function App() {
     if (loading) return;
 
     const intervalId = setInterval(() => {
-      const snapshot = store.getSnapshot() // キャンバスの現状を取得
+      // 最新版では外部関数の getSnapshot(store) を使います
+      const snapshot = getSnapshot(store) 
       fetch('/api/board', {
         method: 'POST',
         body: JSON.stringify(snapshot),
