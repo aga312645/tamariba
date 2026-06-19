@@ -1,7 +1,7 @@
 git status
 git add .
 git commit -m "Hello World! (making now)"
-git push origin React
+git push
 
 npm run dev
 
