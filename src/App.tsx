@@ -1,14 +1,17 @@
-// src/App.tsx
 import { Tldraw, createTLStore, defaultShapeUtils, getSnapshot, loadSnapshot } from '@tldraw/tldraw'
 import '@tldraw/tldraw/tldraw.css'
 import './App.css'
 import { useEffect, useState, useRef } from 'react'
 
+// 👇 Cloudinaryの設定（取得したものに書き換えてください）
+const CLOUD_NAME = "degwriafh" // 例: "dxxxxxxxx"
+const UPLOAD_PRESET = "tamariba" // 例: "tamariba_preset"
+
 function App() {
   const [store] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }))
   const [loading, setLoading] = useState(true)
   
-  // サーバー上の最新バージョンを追跡する（お互いの上書き衝突を防ぐ命綱）
+  // サーバー上の最新バージョンを追跡する命綱
   const versionRef = useRef<number>(0)
 
   // 🔄 サーバーから最新のホワイトボードを取得する共通関数
@@ -17,9 +20,9 @@ function App() {
       const res = await fetch('/api/board')
       if (!res.ok) return
       
-      const data = await res.json() // { snapshot: {...}, version: X }
+      const data = await res.json()
       
-      // サーバーのデータが、自分の持っている手元のバージョンより新しい場合のみ画面を更新
+      // サーバーのデータが手元より新しい場合のみ画面を更新
       if (data.version > versionRef.current) {
         versionRef.current = data.version
         if (data.snapshot && Object.keys(data.snapshot).length > 0) {
@@ -36,18 +39,18 @@ function App() {
     fetchLatestBoard().then(() => setLoading(false))
   }, [store])
 
-  // 2. 【読み込みリアルタイム化】3秒ごとにサーバーの最新版をチェックしにいく
+  // 2. 【リアルタイム自動読み込み】3秒ごとに他人の更新をチェック
   useEffect(() => {
     if (loading) return
 
     const pollInterval = setInterval(() => {
       fetchLatestBoard()
-    }, 3000) // 3秒間隔で他人の更新を自動検知
+    }, 3000) 
 
     return () => clearInterval(pollInterval)
   }, [store, loading])
 
-  // 3. 定期自動保存（5秒ごとに現在のスナップショットを送信）
+  // 3. 定期自動保存（5秒ごとに自分の更新を送信）
   useEffect(() => {
     if (loading) return
 
@@ -63,8 +66,6 @@ function App() {
         if (res.ok) return res.json()
       })
       .then((data) => {
-        // 保存成功時、サーバー側で新しくなった最新バージョンを手元に反映
-        // これにより、直後の自動読み込みで自分の絵が一瞬消える現象（レースコンディション）を防ぎます
         if (data && data.version) {
           versionRef.current = data.version
         }
@@ -75,6 +76,30 @@ function App() {
     return () => clearInterval(saveInterval)
   }, [store, loading])
 
+  // 🎨 4. 【新規追加】画像・動画がドロップされたときのCloudinaryアップロード処理
+  const handleAssetUpload = async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('upload_preset', UPLOAD_PRESET)
+
+    try {
+      // CloudinaryのAPIへ直接送信
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error?.message || 'Upload failed')
+
+      // Cloudinaryから返ってきた公開URLをtldrawに渡す
+      return data.secure_url
+    } catch (error) {
+      console.error('メディアのアップロードに失敗しました:', error)
+      throw error
+    }
+  }
+
   // 読み込み中の画面
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>読み込み中...</div>
@@ -82,7 +107,8 @@ function App() {
 
   return (
     <div className="tldraw-container" style={{ position: 'fixed', inset: 0 }}>
-      <Tldraw store={store} />
+      {/* 👇 onAssetUpload を追加して画像・動画の貼り付けを有効化！ */}
+      <Tldraw store={store} onAssetUpload={handleAssetUpload} />
     </div>
   )
 }
