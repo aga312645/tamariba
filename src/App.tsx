@@ -1,28 +1,32 @@
-import { Tldraw, createTLStore, defaultShapeUtils, getSnapshot, loadSnapshot } from '@tldraw/tldraw'
+import { 
+  Tldraw, 
+  createTLStore, 
+  defaultShapeUtils, 
+  getSnapshot, 
+  loadSnapshot,
+  Editor,
+  AssetRecordType
+} from '@tldraw/tldraw'
 import '@tldraw/tldraw/tldraw.css'
 import './App.css'
 import { useEffect, useState, useRef } from 'react'
 
-// 👇 Cloudinaryの設定（取得したものに書き換えてください）
+// 👇 ここにCloudinaryの設定を入れます
 const CLOUD_NAME = "degwriafh" // 例: "dxxxxxxxx"
 const UPLOAD_PRESET = "tamariba" // 例: "tamariba_preset"
 
 function App() {
   const [store] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }))
   const [loading, setLoading] = useState(true)
-  
-  // サーバー上の最新バージョンを追跡する命綱
   const versionRef = useRef<number>(0)
 
-  // 🔄 サーバーから最新のホワイトボードを取得する共通関数
+  // 🔄 サーバーから最新のホワイトボードを取得
   const fetchLatestBoard = async () => {
     try {
       const res = await fetch('/api/board')
       if (!res.ok) return
       
       const data = await res.json()
-      
-      // サーバーのデータが手元より新しい場合のみ画面を更新
       if (data.version > versionRef.current) {
         versionRef.current = data.version
         if (data.snapshot && Object.keys(data.snapshot).length > 0) {
@@ -39,21 +43,16 @@ function App() {
     fetchLatestBoard().then(() => setLoading(false))
   }, [store])
 
-  // 2. 【リアルタイム自動読み込み】3秒ごとに他人の更新をチェック
+  // 2. リアルタイム自動同期（3秒ごと）
   useEffect(() => {
     if (loading) return
-
-    const pollInterval = setInterval(() => {
-      fetchLatestBoard()
-    }, 3000) 
-
+    const pollInterval = setInterval(() => { fetchLatestBoard() }, 3000) 
     return () => clearInterval(pollInterval)
   }, [store, loading])
 
-  // 3. 定期自動保存（5秒ごとに自分の更新を送信）
+  // 3. 定期自動保存（5秒ごと）
   useEffect(() => {
     if (loading) return
-
     const saveInterval = setInterval(() => {
       const snapshot = getSnapshot(store) 
       
@@ -62,42 +61,55 @@ function App() {
         body: JSON.stringify(snapshot),
         headers: { 'Content-Type': 'application/json' }
       })
-      .then((res) => {
-        if (res.ok) return res.json()
-      })
-      .then((data) => {
-        if (data && data.version) {
-          versionRef.current = data.version
-        }
-      })
+      .then((res) => { if (res.ok) return res.json() })
+      .then((data) => { if (data && data.version) versionRef.current = data.version })
       .catch(err => console.error("保存エラー:", err))
     }, 5000) 
-
     return () => clearInterval(saveInterval)
   }, [store, loading])
 
-  // 🎨 4. 【新規追加】画像・動画がドロップされたときのCloudinaryアップロード処理
-  const handleAssetUpload = async (file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('upload_preset', UPLOAD_PRESET)
+  // 🎨 4. 【修正ポイント】v3対応の画像アップロード登録処理
+  const handleMount = (editor: Editor) => {
+    editor.registerExternalAssetHandler('image', async ({ file }) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('upload_preset', UPLOAD_PRESET)
 
-    try {
-      // CloudinaryのAPIへ直接送信
-      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`, {
-        method: 'POST',
-        body: formData,
-      })
+      try {
+        // Cloudinaryへ送信（/auto/upload で画像・動画を自動判別）
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
+          method: 'POST',
+          body: formData,
+        })
 
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error?.message || 'Upload failed')
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error?.message || 'Upload failed')
 
-      // Cloudinaryから返ってきた公開URLをtldrawに渡す
-      return data.secure_url
-    } catch (error) {
-      console.error('メディアのアップロードに失敗しました:', error)
-      throw error
-    }
+        // 画像のサイズ（幅・高さ）を取得する（tldrawが正しく表示するために必須）
+        const img = new Image()
+        img.src = URL.createObjectURL(file)
+        await new Promise((resolve) => { img.onload = resolve })
+
+        // tldrawに返すアセットデータ
+        return {
+          id: AssetRecordType.createId(),
+          type: 'image',
+          typeName: 'asset',
+          props: {
+            name: file.name,
+            src: data.secure_url, // Cloudinaryから返ってきたURL
+            w: img.width,
+            h: img.height,
+            mimeType: file.type,
+            isAnimated: file.type === 'image/gif',
+          },
+          meta: {}
+        }
+      } catch (error) {
+        console.error('メディアのアップロードに失敗しました:', error)
+        throw error
+      }
+    })
   }
 
   // 読み込み中の画面
@@ -107,8 +119,8 @@ function App() {
 
   return (
     <div className="tldraw-container" style={{ position: 'fixed', inset: 0 }}>
-      {/* 👇 onAssetUpload を追加して画像・動画の貼り付けを有効化！ */}
-      <Tldraw store={store} onAssetUpload={handleAssetUpload} />
+      {/* 👇 onAssetUpload を消して、onMount で関数を呼び出します */}
+      <Tldraw store={store} onMount={handleMount} />
     </div>
   )
 }
