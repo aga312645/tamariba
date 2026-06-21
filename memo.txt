@@ -5,6 +5,8 @@ git push
 
 npm run dev
 
+npx wrangler d1 execute tamariba-db --remote --command "UPDATE users SET is_admin = 1 WHERE username = 'あなたのユーザー名';"
+
 npx wrangler d1 execute --remote --file=./schema.sql
 
 const CLOUD_NAME = "degwriafh" // 例: "dxxxxxxxx"
