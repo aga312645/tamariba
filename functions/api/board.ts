@@ -1,14 +1,37 @@
 // functions/api/board.ts
 
-// 保存 (POST)
+// 保存 (POST) - 🔒 ログイン必須
 export async function onRequestPost(context: any) {
   const { env, request } = context;
   try {
     if (!env.DB) throw new Error("D1データベース(env.DB)が見つかりません。");
 
+    // 1. ブラウザから送られてきたCookieからセッションIDを取り出す
+    const cookieHeader = request.headers.get("Cookie") || "";
+    const match = cookieHeader.match(/session_id=([^;]+)/);
+    const sessionId = match ? match[1] : null;
+
+    if (!sessionId) {
+      return new Response(JSON.stringify({ error: "ログインが必要です。" }), {
+        status: 401, headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 2. D1データベースでセッションIDが有効か（有効期限内か）チェックする
+    const now = Date.now();
+    const session: any = await env.DB.prepare(
+      "SELECT user_id FROM sessions WHERE id = ? AND expires_at > ?"
+    ).bind(sessionId, now).first();
+
+    if (!session) {
+      return new Response(JSON.stringify({ error: "セッションが切れました。再度ログインしてください。" }), {
+        status: 401, headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 3. 認証成功！ 今まで通りホワイトボードのデータを保存する
     const data = await request.json();
     
-    // バージョンをカウントアップしながら上書きし、新しいバージョン番号を返す(RETURNING)
     const result: any = await env.DB.prepare(`
       INSERT INTO board (id, snapshot, version) 
       VALUES (1, ?, 1) 
@@ -21,15 +44,13 @@ export async function onRequestPost(context: any) {
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (error: any) {
-    // 500エラーが起きても原因がブラウザの検証ツールで読めるように詳細を返す
     return new Response(JSON.stringify({ error: error.message, detail: "保存処理（POST）でエラーが発生しました。" }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      status: 500, headers: { 'Content-Type': 'application/json' }
     });
   }
 }
 
-// 取得 (GET)
+// 取得 (GET) - 👁️ 誰でも閲覧可能
 export async function onRequestGet(context: any) {
   const { env } = context;
   try {
@@ -43,7 +64,6 @@ export async function onRequestGet(context: any) {
       });
     }
 
-    // snapshot(文字列)をオブジェクトに戻し、versionと一緒に綺麗なJSONで返す
     return new Response(JSON.stringify({
       snapshot: JSON.parse(result.snapshot),
       version: result.version
@@ -52,8 +72,7 @@ export async function onRequestGet(context: any) {
     });
   } catch (error: any) {
     return new Response(JSON.stringify({ error: error.message, detail: "読み込み処理（GET）でエラーが発生しました。" }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      status: 500, headers: { 'Content-Type': 'application/json' }
     });
   }
 }
