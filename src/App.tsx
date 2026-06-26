@@ -22,6 +22,22 @@ interface AdminUser {
   created_at: number;
 }
 
+// 🛡️ ログデータの型定義（新規）
+interface ShapeLog {
+  shape_id: string;
+  username: string;
+  ip_address: string;
+  created_at: number;
+}
+
+interface AssetLog {
+  asset_id: string;
+  username: string;
+  ip_address: string;
+  src_url: string;
+  created_at: number;
+}
+
 function App() {
   const [store] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }))
   const [loading, setLoading] = useState(true)
@@ -43,6 +59,13 @@ function App() {
   // 👑 管理者用（ユーザー管理）の状態管理
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
   const [adminMessage, setAdminMessage] = useState('')
+
+  // 🛡️ IPログ用の状態管理（新規）
+  const [shapeLogs, setShapeLogs] = useState<ShapeLog[]>([])
+  const [assetLogs, setAssetLogs] = useState<AssetLog[]>([])
+  const [showMiniLogs, setShowMiniLogs] = useState(false)
+  const [showFullLogs, setShowFullLogs] = useState(false)
+  const [logsMessage, setLogsMessage] = useState('')
 
   // 🎨 UI開閉用の状態管理
   const [showAuthPanel, setShowAuthPanel] = useState(false)
@@ -220,6 +243,24 @@ function App() {
     }
   }
 
+  // 👑 管理者用：IPログの取得（新規）
+  const fetchLogsForAdmin = async () => {
+    setLogsMessage("ログ取得中...")
+    try {
+      const res = await fetch('/api/admin/logs')
+      if (res.ok) {
+        const data = await res.json()
+        setShapeLogs(data.recentShapes || [])
+        setAssetLogs(data.recentAssets || [])
+        setLogsMessage('')
+      } else {
+        setLogsMessage("ログの取得に失敗しました。")
+      }
+    } catch (err) {
+      setLogsMessage("エラーが発生しました。")
+    }
+  }
+
   // 👑 管理者用：ユーザーの削除
   const handleDeleteUser = async (userId: string, username: string) => {
     if (!window.confirm(`本当にユーザー「${username}」を削除しますか？`)) return
@@ -228,7 +269,7 @@ function App() {
       const data = await res.json()
       if (res.ok) {
         alert("ユーザーを削除しました。")
-        fetchUsersForAdmin() // リスト再取得
+        fetchUsersForAdmin() 
       } else {
         alert(`削除失敗: ${data.error}`)
       }
@@ -236,13 +277,6 @@ function App() {
       alert("エラーが発生しました。")
     }
   }
-
-  // 管理者パネルを開くときのフック
-  useEffect(() => {
-    if (showAdminPanel && isAdmin) {
-      fetchUsersForAdmin()
-    }
-  }, [showAdminPanel, isAdmin])
 
   // 👑 管理者用：ボードの初期化
   const handleClearBoard = async () => {
@@ -260,6 +294,26 @@ function App() {
     }
   }
 
+  useEffect(() => {
+    if (showAdminPanel && isAdmin) {
+      fetchUsersForAdmin()
+    }
+  }, [showAdminPanel, isAdmin])
+
+  // ミニログや全画面ログを開くときのフック
+  useEffect(() => {
+    if ((showMiniLogs || showFullLogs) && isAdmin) {
+      fetchLogsForAdmin()
+    }
+  }, [showMiniLogs, showFullLogs, isAdmin])
+
+  // ユーティリティ：日付フォーマット
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleString('ja-JP', { 
+      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' 
+    })
+  }
+
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>読み込み中...</div>
   }
@@ -268,90 +322,202 @@ function App() {
     <div className="tldraw-container" style={{ position: 'fixed', inset: 0 }}>
       <Tldraw store={store} onMount={handleMount} />
       
-      {/* 右下のフローティングエリア */}
-      <div style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
-        
-        {/* 👑 管理者設定パネル */}
-        {showAdminPanel && isAdmin && (
-          <div style={{ background: '#fff3cd', padding: 15, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 320, maxHeight: 400, overflowY: 'auto' }}>
-            <h3 style={{ margin: '0 0 10px 0', fontSize: 16, color: '#856404' }}>👑 管理者管理画面</h3>
+      {/* 📄 👑 全画面ログビュー (モーダル) */}
+      {showFullLogs && isAdmin && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 100000, background: 'rgba(255,255,255,0.95)', padding: '40px 20px', overflowY: 'auto' }}>
+          <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #ccc', paddingBottom: 10, marginBottom: 20 }}>
+              <h2 style={{ margin: 0 }}>🛡️ 詳細IPログ (全画面)</h2>
+              <div>
+                <button onClick={() => fetchLogsForAdmin()} style={{ padding: '8px 16px', marginRight: 10, cursor: 'pointer' }}>更新</button>
+                <button onClick={() => setShowFullLogs(false)} style={{ padding: '8px 16px', background: '#dc3545', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>閉じる</button>
+              </div>
+            </div>
+            {logsMessage && <p>{logsMessage}</p>}
             
-            <button onClick={handleClearBoard} style={{ width: '100%', padding: 8, background: '#dc3545', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', marginBottom: 15, fontWeight: 'bold' }}>
-              ボードデータを全消去する
-            </button>
+            <div style={{ display: 'flex', gap: 20 }}>
+              {/* メディアログ (左) */}
+              <div style={{ flex: 1 }}>
+                <h3>🖼️ メディア (アップロード)</h3>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                  <thead>
+                    <tr style={{ background: '#f8f9fa' }}>
+                      <th style={{ padding: 8, border: '1px solid #ddd', textAlign: 'left' }}>日時</th>
+                      <th style={{ padding: 8, border: '1px solid #ddd', textAlign: 'left' }}>ユーザー (IP)</th>
+                      <th style={{ padding: 8, border: '1px solid #ddd', textAlign: 'left' }}>ファイルURL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {assetLogs.map((log, i) => (
+                      <tr key={i}>
+                        <td style={{ padding: 8, border: '1px solid #ddd' }}>{formatDate(log.created_at)}</td>
+                        <td style={{ padding: 8, border: '1px solid #ddd' }}><b>{log.username}</b><br/><span style={{ color: 'gray', fontSize: 11 }}>{log.ip_address}</span></td>
+                        <td style={{ padding: 8, border: '1px solid #ddd', wordBreak: 'break-all' }}>
+                          <a href={log.src_url} target="_blank" rel="noreferrer" style={{ color: '#007bff' }}>確認する</a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-            <div style={{ borderTop: '1px solid #ecc', paddingTop: 10 }}>
-              <div style={{ fontSize: 13, fontWeight: 'bold', marginBottom: 5, color: '#665' }}>アカウント管理</div>
-              {adminMessage && <div style={{ fontSize: 12, color: 'gray' }}>{adminMessage}</div>}
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {adminUsers.map(u => (
-                  <li key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '6px 8px', borderRadius: 4, fontSize: 12, border: '1px solid #edd' }}>
-                    <span>{u.username} {u.is_admin === 1 && <b style={{ color: 'orange' }}>[Admin]</b>}</span>
-                    {u.is_admin !== 1 && (
-                      <button onClick={() => handleDeleteUser(u.id, u.username)} style={{ background: '#ffc107', border: 'none', borderRadius: 3, padding: '2px 6px', cursor: 'pointer', fontSize: 11 }}>
-                        削除
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
+              {/* 描画オブジェクトログ (右) */}
+              <div style={{ flex: 1 }}>
+                <h3>🎨 描画オブジェクト</h3>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                  <thead>
+                    <tr style={{ background: '#f8f9fa' }}>
+                      <th style={{ padding: 8, border: '1px solid #ddd', textAlign: 'left' }}>日時</th>
+                      <th style={{ padding: 8, border: '1px solid #ddd', textAlign: 'left' }}>ユーザー (IP)</th>
+                      <th style={{ padding: 8, border: '1px solid #ddd', textAlign: 'left' }}>Shape ID</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shapeLogs.map((log, i) => (
+                      <tr key={i}>
+                        <td style={{ padding: 8, border: '1px solid #ddd' }}>{formatDate(log.created_at)}</td>
+                        <td style={{ padding: 8, border: '1px solid #ddd' }}><b>{log.username}</b><br/><span style={{ color: 'gray', fontSize: 11 }}>{log.ip_address}</span></td>
+                        <td style={{ padding: 8, border: '1px solid #ddd', wordBreak: 'break-all', fontSize: 11, fontFamily: 'monospace' }}>{log.shape_id}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* 🔑 ログイン・一般設定パネル */}
-        {showAuthPanel && (
-          <div style={{ background: 'white', padding: 20, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 250 }}>
-            {isLoggedIn ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ color: 'green', fontWeight: 'bold', textAlign: 'center' }}>✅ ログイン済み</div>
-                
-                {isAdmin && (
-                  <button onClick={() => setShowAdminPanel(!showAdminPanel)} style={{ padding: 8, background: '#ffc107', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>
-                    {showAdminPanel ? '👑 管理画面を閉じる' : '👑 管理画面を開く'}
-                  </button>
-                )}
+      {/* 右下のフローティングエリア */}
+      <div style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 9999, display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+        
+        {/* 👑 ミニログパネル (横に展開) */}
+        {showMiniLogs && isAdmin && !showFullLogs && (
+          <div style={{ background: '#e2e3e5', padding: 15, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 320, maxHeight: 400, overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <h3 style={{ margin: 0, fontSize: 14, color: '#383d41' }}>🔍 IPログ (直近)</h3>
+              <button onClick={() => setShowMiniLogs(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>×</button>
+            </div>
+            {logsMessage && <div style={{ fontSize: 12 }}>{logsMessage}</div>}
+            
+            <div style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 5 }}>🖼️ メディア (直近5件)</div>
+            <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 10px 0', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {assetLogs.slice(0, 5).map((log, i) => (
+                <li key={i} style={{ background: '#fff', padding: '4px 6px', borderRadius: 4, fontSize: 11, border: '1px solid #ccc' }}>
+                  <div style={{ color: 'gray' }}>{formatDate(log.created_at)}</div>
+                  <div><b>{log.username}</b> ({log.ip_address})</div>
+                  <a href={log.src_url} target="_blank" rel="noreferrer" style={{ color: '#007bff' }}>ファイルを開く</a>
+                </li>
+              ))}
+            </ul>
 
-                {!showPasswordChange ? (
-                  <button onClick={() => setShowPasswordChange(true)} style={{ padding: 8, background: '#17a2b8', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
-                    🔒 パスワードを変更する
-                  </button>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, background: '#f8f9fa', borderRadius: 4 }}>
-                    <div style={{ fontSize: 12, fontWeight: 'bold' }}>パスワード変更</div>
-                    <input type="password" placeholder="現在のパスワード" value={oldPassword} onChange={e => setOldPassword(e.target.value)} style={{ padding: 6, border: '1px solid #ccc', borderRadius: 4 }} />
-                    <input type="password" placeholder="新しいパスワード" value={newPassword} onChange={e => setNewPassword(e.target.value)} style={{ padding: 6, border: '1px solid #ccc', borderRadius: 4 }} />
-                    <button onClick={handleChangePassword} style={{ padding: 6, background: '#28a745', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>変更を確定</button>
-                    <button onClick={() => {setShowPasswordChange(false); setPasswordMsg('');}} style={{ padding: 6, background: '#6c757d', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>キャンセル</button>
-                    {passwordMsg && <div style={{ fontSize: 12, textAlign: 'center', marginTop: 4 }}>{passwordMsg}</div>}
-                  </div>
-                )}
-
-                <button onClick={() => { setIsLoggedIn(false); setIsAdmin(false); setShowAuthPanel(false); setShowAdminPanel(false); setShowPasswordChange(false); }} style={{ padding: 8, background: '#eee', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
-                  ログアウト / 閉じる
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ fontSize: 12, color: 'gray', textAlign: 'center' }}>書き込むにはログインが必要です</div>
-                <input type="text" placeholder="ユーザー名" value={authUsername} onChange={e => setAuthUsername(e.target.value)} style={{ padding: 8, border: '1px solid #ccc', borderRadius: 4 }} />
-                <input type="password" placeholder="パスワード" value={authPassword} onChange={e => setAuthPassword(e.target.value)} style={{ padding: 8, border: '1px solid #ccc', borderRadius: 4 }} />
-                <div style={{ display: 'flex', gap: 5 }}>
-                  <button onClick={() => handleAuth('login')} style={{ flex: 1, padding: 8, background: '#007bff', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>ログイン</button>
-                  <button onClick={() => handleAuth('register')} style={{ flex: 1, padding: 8, background: '#28a745', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>新規登録</button>
-                </div>
-                {authMessage && <div style={{ fontSize: 12, color: 'red', textAlign: 'center' }}>{authMessage}</div>}
-              </div>
-            )}
+            <div style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 5 }}>🎨 描画 (直近5件)</div>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {shapeLogs.slice(0, 5).map((log, i) => (
+                <li key={i} style={{ background: '#fff', padding: '4px 6px', borderRadius: 4, fontSize: 11, border: '1px solid #ccc' }}>
+                  <div style={{ color: 'gray' }}>{formatDate(log.created_at)}</div>
+                  <div><b>{log.username}</b> ({log.ip_address})</div>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
-        <button 
-          onClick={() => setShowAuthPanel(!showAuthPanel)}
-          style={{ width: 60, height: 60, borderRadius: '50%', background: isLoggedIn ? '#28a745' : '#007bff', color: 'white', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.2)', cursor: 'pointer', fontSize: 24, display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-        >
-          {isLoggedIn ? '👤' : '🔒'}
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
+          
+          {/* 👑 管理者設定パネル */}
+          {showAdminPanel && isAdmin && (
+            <div style={{ background: '#fff3cd', padding: 15, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 320, maxHeight: 400, overflowY: 'auto' }}>
+              <h3 style={{ margin: '0 0 10px 0', fontSize: 16, color: '#856404' }}>👑 管理者管理画面</h3>
+              
+              <div style={{ display: 'flex', gap: 5, marginBottom: 15 }}>
+                <button onClick={() => setShowMiniLogs(!showMiniLogs)} style={{ flex: 1, padding: 8, background: '#17a2b8', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 'bold' }}>
+                  🔍 ログ(小)
+                </button>
+                <button onClick={() => { setShowFullLogs(true); setShowAdminPanel(false); }} style={{ flex: 1, padding: 8, background: '#007bff', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 'bold' }}>
+                  📄 ログ(全画面)
+                </button>
+              </div>
+
+              <button onClick={handleClearBoard} style={{ width: '100%', padding: 8, background: '#dc3545', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', marginBottom: 15, fontWeight: 'bold' }}>
+                ボードデータを全消去する
+              </button>
+
+              <div style={{ borderTop: '1px solid #ecc', paddingTop: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 'bold', marginBottom: 5, color: '#665' }}>アカウント管理</div>
+                {adminMessage && <div style={{ fontSize: 12, color: 'gray' }}>{adminMessage}</div>}
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {adminUsers.map(u => (
+                    <li key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '6px 8px', borderRadius: 4, fontSize: 12, border: '1px solid #edd' }}>
+                      <span>
+                        {u.username} {u.is_admin === 1 && <b style={{ color: 'orange' }}>[Admin]</b>}
+                      </span>
+                      {u.is_admin !== 1 && (
+                        <button onClick={() => handleDeleteUser(u.id, u.username)} style={{ background: '#ffc107', border: 'none', borderRadius: 3, padding: '2px 6px', cursor: 'pointer', fontSize: 11 }}>
+                          削除
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* 🔑 ログイン・一般設定パネル */}
+          {showAuthPanel && (
+            <div style={{ background: 'white', padding: 20, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 250 }}>
+              {isLoggedIn ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ color: 'green', fontWeight: 'bold', textAlign: 'center' }}>✅ ログイン済み</div>
+                  
+                  {isAdmin && (
+                    <button onClick={() => setShowAdminPanel(!showAdminPanel)} style={{ padding: 8, background: '#ffc107', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>
+                      {showAdminPanel ? '👑 管理画面を閉じる' : '👑 管理画面を開く'}
+                    </button>
+                  )}
+
+                  {!showPasswordChange ? (
+                    <button onClick={() => setShowPasswordChange(true)} style={{ padding: 8, background: '#17a2b8', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                      🔒 パスワードを変更する
+                    </button>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, background: '#f8f9fa', borderRadius: 4 }}>
+                      <div style={{ fontSize: 12, fontWeight: 'bold' }}>パスワード変更</div>
+                      <input type="password" placeholder="現在のパスワード" value={oldPassword} onChange={e => setOldPassword(e.target.value)} style={{ padding: 6, border: '1px solid #ccc', borderRadius: 4 }} />
+                      <input type="password" placeholder="新しいパスワード" value={newPassword} onChange={e => setNewPassword(e.target.value)} style={{ padding: 6, border: '1px solid #ccc', borderRadius: 4 }} />
+                      <button onClick={handleChangePassword} style={{ padding: 6, background: '#28a745', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>変更を確定</button>
+                      <button onClick={() => {setShowPasswordChange(false); setPasswordMsg('');}} style={{ padding: 6, background: '#6c757d', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>キャンセル</button>
+                      {passwordMsg && <div style={{ fontSize: 12, textAlign: 'center', marginTop: 4 }}>{passwordMsg}</div>}
+                    </div>
+                  )}
+
+                  <button onClick={() => { setIsLoggedIn(false); setIsAdmin(false); setShowAuthPanel(false); setShowAdminPanel(false); setShowPasswordChange(false); setShowMiniLogs(false); setShowFullLogs(false); }} style={{ padding: 8, background: '#eee', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                    ログアウト / 閉じる
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ fontSize: 12, color: 'gray', textAlign: 'center' }}>書き込むにはログインが必要です</div>
+                  <input type="text" placeholder="ユーザー名" value={authUsername} onChange={e => setAuthUsername(e.target.value)} style={{ padding: 8, border: '1px solid #ccc', borderRadius: 4 }} />
+                  <input type="password" placeholder="パスワード" value={authPassword} onChange={e => setAuthPassword(e.target.value)} style={{ padding: 8, border: '1px solid #ccc', borderRadius: 4 }} />
+                  <div style={{ display: 'flex', gap: 5 }}>
+                    <button onClick={() => handleAuth('login')} style={{ flex: 1, padding: 8, background: '#007bff', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>ログイン</button>
+                    <button onClick={() => handleAuth('register')} style={{ flex: 1, padding: 8, background: '#28a745', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>新規登録</button>
+                  </div>
+                  {authMessage && <div style={{ fontSize: 12, color: 'red', textAlign: 'center' }}>{authMessage}</div>}
+                </div>
+              )}
+            </div>
+          )}
+
+          <button 
+            onClick={() => setShowAuthPanel(!showAuthPanel)}
+            style={{ width: 60, height: 60, borderRadius: '50%', background: isLoggedIn ? '#28a745' : '#007bff', color: 'white', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.2)', cursor: 'pointer', fontSize: 24, display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+          >
+            {isLoggedIn ? '👤' : '🔒'}
+          </button>
+        </div>
       </div>
     </div>
   )

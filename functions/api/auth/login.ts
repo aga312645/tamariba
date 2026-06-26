@@ -9,6 +9,7 @@ export async function onRequestPost(context: any) {
   const { env, request } = context;
   try {
     const { username, password } = await request.json();
+    const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
 
     const user: any = await env.DB.prepare("SELECT id, password_hash, is_admin FROM users WHERE username = ?").bind(username).first();
     if (!user) {
@@ -21,9 +22,13 @@ export async function onRequestPost(context: any) {
     }
 
     const sessionId = crypto.randomUUID();
-    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // ⏳ 30日間
+    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30日間
 
-    await env.DB.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)").bind(sessionId, user.id, expiresAt).run();
+    // セッションの保存と同時に、ユーザーの最終ログインIPを更新
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)").bind(sessionId, user.id, expiresAt),
+      env.DB.prepare("UPDATE users SET last_login_ip = ? WHERE id = ?").bind(clientIP, user.id)
+    ]);
 
     const cookie = `session_id=${sessionId}; HttpOnly; Path=/; Max-Age=${30 * 24 * 60 * 60}; Secure; SameSite=Strict`;
     
